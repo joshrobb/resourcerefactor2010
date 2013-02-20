@@ -105,6 +105,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AspxHardCodedString.cs" />
     <Compile Include="BaseHardCodedString.cs" />
     <Compile Include="CodeFileCollection.cs" />
     <Compile Include="CSharpRazorHardCodedString.cs" />

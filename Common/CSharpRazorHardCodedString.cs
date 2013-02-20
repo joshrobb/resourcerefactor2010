@@ -102,12 +102,61 @@ namespace Microsoft.VSPowerToys.ResourceRefactor.Common
 
         public override Collection<NamespaceImport> GetImportedNamespaces()
         {
-            var namespaces = base.GetImportedNamespaces();
+            var namespaces = GetImportedNamespacesFromCSharpFIXME();
             GetWebConfigNamespaces(namespaces);
             GetNamespacesFromFile(namespaces);
 
             return namespaces;
         }
+
+        private Collection<NamespaceImport> GetImportedNamespacesFromCSharpFIXME() {
+            Collection<NamespaceImport> importedNamespaces = new Collection<NamespaceImport>();
+            try {
+                if (this.Parent.FileCodeModel != null) {
+                    try {
+                        CodeElement t = this.Parent.FileCodeModel.CodeElementFromPoint(
+                                                        this.BeginEditPoint,
+                                                        vsCMElement.vsCMElementNamespace);
+                        if (t != null) {
+                            importedNamespaces.Add(new NamespaceImport(t.FullName, t.FullName));
+                        }
+                    } catch (System.Runtime.InteropServices.COMException) {
+                    }
+                    foreach (CodeElement element in this.Parent.FileCodeModel.CodeElements) {
+                        FindUsingStatements(element, importedNamespaces);
+                    }
+                }
+            } catch (System.Runtime.InteropServices.COMException) { } catch (NotImplementedException) { }
+            return importedNamespaces;
+        }
+
+        /// <summary>
+        /// Recurses through code elements to find all using statements and inserts them in to the provided collection
+        /// </summary>
+        /// <param name="element">Code element representing either namespace or import statement</param>
+        /// <param name="namespaces">Collection to ad namespaces to</param>
+        private void FindUsingStatements(CodeElement element, Collection<NamespaceImport> namespaces) {
+            System.Text.RegularExpressions.Regex regExp = new Regex("using[ \\t]+((.)*);");
+            if (element.Kind == vsCMElement.vsCMElementImportStmt) {
+                string text = element.StartPoint.CreateEditPoint().GetText(element.EndPoint);
+                Match m = regExp.Match(text);
+                if (m.Groups.Count > 2) {
+                    if (m.Groups[1].Value.Contains("=")) {
+                        var parts = m.Groups[1].Value.Split(new[] { '=' }, 2);
+                        namespaces.Add(new NamespaceImport(m.Groups[1].Value, parts[0].Trim(), parts[1].Trim()));
+                    } else
+                        namespaces.Add(new NamespaceImport(m.Groups[1].Value, m.Groups[1].Value));
+                }
+            }
+
+            // We don't need to recurse in to other types as they won't contain using statements
+            if (element.Kind == vsCMElement.vsCMElementNamespace) {
+                foreach (CodeElement children in element.Children) {
+                    FindUsingStatements(children, namespaces);
+                }
+            }
+        }
+
 
         private void GetNamespacesFromFile(Collection<NamespaceImport> namespaces)
         {
